@@ -1,0 +1,26 @@
+[
+  {
+    "first_name": "jOHN",
+    "last_name": "dOE",
+    "email": "john.doe@gmail.com",
+    "company_name": "Placeholder Industrial LLC"
+  },
+  {
+    "first_name": "SARAH",
+    "last_name": "CONNOR",
+    "email": "sconnor@cyberdyne.co",
+    "company_name": "Cyberdyne Systems Incorporated"
+  },
+  {
+    "first_name": "thomas",
+    "last_name": "anderson",
+    "email": "neo@metacortex.net",
+    "company_name": "MetaCortex Ltd."
+  },
+  {
+    "first_name": "Invalid",
+    "last_name": "User",
+    "email": "fake-email",
+    "company_name": "Fake Company Ltd."
+  }
+]

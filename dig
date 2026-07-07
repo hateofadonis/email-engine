@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# intercept specific domain configurations targeted by our audit script
+if [[ "$*" == *"+short MX brokendomain.local"* ]]; then
+    echo "10 mail.brokendomain.local."
+    exit 0
+
+elif [[ "$*" == *"+short TXT brokendomain.local"* ]]; then
+    # trigger 1: multiple spf records
+    # echo '"v=spf1 include:_spf.google.com ~all"'
+    # echo '"v=spf1 include:sendgrid.net -all"'
+    
+    # trigger 2: 10+ dns lookup limit rule violation
+    # (uncomment the line below and comment out the two lines above to switch tests)
+    echo '"v=spf1 include:1.com include:2.com include:3.com include:4.com include:5.com include:6.com include:7.com include:8.com include:9.com include:10.com include:11.com ~all"'
+    exit 0
+
+elif [[ "$*" == *"brokendomain.local"* ]]; then
+    # return empty for subdomains (_dmarc, _mta-sts, selectors) to trigger compounding warnings
+    echo ""
+    exit 0
+fi
+
+# fallback to the real system utility for any normal domains
+/usr/bin/dig "$@"

@@ -1,0 +1,26 @@
+services:
+  mailserver:
+    image: mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: your_aws_ec2_hostname
+    domainname: your_domain.dedyn.io
+    ports:
+      - "25:25"     # inbound mail delivery
+      - "143:143"   # IMAP sync
+      - "587:587"   # SMTP outbound submission
+    volumes:
+      - ./docker-maildata:/var/mail
+      - ./docker-maildata-state:/var/mail-state
+      - ./docker-config:/tmp/docker-mailserver
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - ENABLE_SPAMASSASSIN=0
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=1
+      - ONE_DIR=1
+      - DMS_DEBUG=0
+      - RELAY_HOST=smtp-relay.brevo.com
+      - RELAY_PORT=587
+      - RELAY_USER=[REDACTED_BREVO_SMTP_LOGIN_EMAIL]
+      - RELAY_PASS=[REDACTED_BREVO_SMTP_KEY]
+    restart: always

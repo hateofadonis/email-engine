@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feedback xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="rua.xsd">
+  <report_metadata>
+    <org_name>google.com</org_name>
+    <email>noreply-dmarc-support@google.com</email>
+    <extra_contact_info>https://support.google.com/a/answer/2466563</extra_contact_info>
+    <report_id>98453991427389100</report_id>
+    <date_range>
+      <begin>1782739029</begin>
+      <end>1782825429</end>
+    </date_range>
+  </report_metadata>
+  <policy_published>
+    <domain>fauzport.dedyn.io</domain>
+    <adkim>r</adkim>
+    <aspf>r</aspf>
+    <p>none</p>
+    <sp>none</sp>
+    <pct>100</pct>
+  </policy_published>
+  <record>
+    <row>
+      <source_ip>198.51.100.12</source_ip>
+      <count>1</count>
+      <policy_evaluated>
+        <disposition>none</disposition>
+        <dkim>pass</dkim>
+        <spf>fail</spf>
+      </policy_evaluated>
+    </row>
+    <identifiers>
+      <header_from>fauzport.dedyn.io</header_from>
+    </identifiers>
+    <auth_results>
+      <dkim>
+        <domain>fauzport.dedyn.io</domain>
+        <result>pass</result>
+        <selector>mail</selector>
+      </dkim>
+      <spf>
+        <domain>forwarding-relay.net</domain>
+        <result>pass</result>
+      </spf>
+    </auth_results>
+  </record>
+</feedback>

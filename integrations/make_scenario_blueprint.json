@@ -1,0 +1,44 @@
+{
+  "name": "Apollo to Smartlead Programmatic Ingest Pipeline",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebhook",
+      "metadata": {
+        "label": "Apollo Webhook Listener"
+      }
+    },
+    {
+      "id": 2,
+      "module": "string:RegexReplace",
+      "metadata": {
+        "label": "Sanitize Company Suffixes"
+      },
+      "params": {
+        "pattern": "\\s+(Inc\\.|LLC|Co\\.|Ltd\\.|Incorporated)$",
+        "replacement": ""
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:MakeRequest",
+      "metadata": {
+        "label": "Hunter.io Verification Gate"
+      }
+    },
+    {
+      "id": 4,
+      "module": "router:Filters",
+      "metadata": {
+        "label": "Deliverability Filter (Valid Only)"
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:MakeRequest",
+      "metadata": {
+        "label": "Smartlead Campaign Injection"
+      }
+    }
+  ]
+}
