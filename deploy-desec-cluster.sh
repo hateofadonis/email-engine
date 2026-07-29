@@ -1,92 +1,86 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-# need curl to hit deSEC API. check now.
-for cmd in curl; do
-    if ! command -v "$cmd" &>/dev/null; then
-        echo "ERROR: utility '$cmd' is missing. install it." >&2
-        exit 1
-    fi
-done
+# enforce strict environment variables. fail immediately if missing.
+desec_token="${desec_token:?missing desec_token in environment}"
+domain="${domain:?missing domain in environment}"
+aws_hostname="${aws_hostname:?missing aws_hostname in environment}"
+proxy_ip="${proxy_ip:?missing proxy_ip in environment}"
+dkim_key="${dkim_key:?missing dkim_key in environment}"
 
-# replace these with your actual parameters or export them in your env
-API_TOKEN="your_desec_api_token_here"
-DOMAIN="your_domain.dedyn.io"
-AWS_IP="your_aws_public_ip"
-AWS_HOSTNAME="your_aws_ec2_hostname"
-PROXY_IP="your_proxy_endpoint_ip"
+# sanitize input. strip trailing dots to prevent fqdn syntax errors.
+aws_hostname="${aws_hostname%.}"
+domain="${domain%.}"
 
-# pull your generated dkim key from container and paste here
-DKIM_KEY="v=DKIM1; h=sha256; k=rsa; p=your_base64_public_key_string"
+# handle dkim 255-character chunking limit for 2048-bit rsa keys.
+# desec requires txt records to be wrapped in literal double quotes.
+if [[ ${#dkim_key} -gt 200 ]]; then
+    dkim_record="\"v=DKIM1; k=rsa; p=${dkim_key:0:200}\" \"${dkim_key:200}\""
+else
+    dkim_record="\"v=DKIM1; k=rsa; p=${dkim_key}\""
+fi
 
-echo "compiling JSON payloads..."
-echo "targeting deSEC API for: ${DOMAIN}"
+echo "building idempotent patch payload via jq..."
 
-# literal quotes around variables are needed because deSEC API is strict with JSON string structures
-JSON_PAYLOAD=$(cat <<EOF
-[
-  {
-    "subname": "",
-    "type": "A",
-    "ttl": 3600,
-    "records": ["${PROXY_IP}"]
-  },
-  {
-    "subname": "",
-    "type": "TXT",
-    "ttl": 3600,
-    "records": ["\"v=spf1 mx ip4:${AWS_IP} ~all\""]
-  },
-  {
-    "subname": "_dmarc",
-    "type": "TXT",
-    "ttl": 3600,
-    "records": ["\"v=DMARC1; p=none; rua=mailto:telemetry@${DOMAIN}\""]
-  },
-  {
-    "subname": "mail._domainkey",
-    "type": "TXT",
-    "ttl": 3600,
-    "records": ["\"${DKIM_KEY}\""]
-  },
-  {
-    "subname": "",
-    "type": "MX",
-    "ttl": 3600,
-    "records": ["10 ${AWS_HOSTNAME}."]
-  },
-  {
-    "subname": "inst",
-    "type": "CNAME",
-    "ttl": 3600,
-    "records": ["prox.itrackly.com."]
-  },
-  {
-    "subname": "emailtracking",
-    "type": "CNAME",
-    "ttl": 3600,
-    "records": ["open.sleadtrack.com."]
-  }
-]
-EOF
+# safely construct json payload using jq to prevent injection bugs.
+payload=$(jq -n -c \
+    --arg domain "$domain" \
+    --arg mx_target "10 ${aws_hostname}." \
+    --arg proxy "$proxy_ip" \
+    --arg dkim "$dkim_record" \
+    '[
+        {
+            "subname": "",
+            "type": "MX",
+            "ttl": 3600,
+            "records": [$mx_target]
+        },
+        {
+            "subname": "",
+            "type": "TXT",
+            "ttl": 3600,
+            "records": [
+                "\"v=spf1 mx a:" + $domain + " ~all\"",
+                "\"v=DMARC1; p=reject; rua=mailto:admin@" + $domain + ";\""
+            ]
+        },
+        {
+            "subname": "mail._domainkey",
+            "type": "TXT",
+            "ttl": 3600,
+            "records": [$dkim]
+        },
+        {
+            "subname": "emailtracking",
+            "type": "CNAME",
+            "ttl": 3600,
+            "records": ["open.sleadtrack.com."]
+        },
+        {
+            "subname": "inst",
+            "type": "CNAME",
+            "ttl": 3600,
+            "records": ["prox.itrackly.com."]
+        }
+    ]'
 )
 
-echo "sending PUT request to deSEC API..."
+echo "pushing state to desec api..."
 
-RESPONSE=$(curl -s -w "%{http_code}" -X PUT "https://desec.io/api/v1/domains/${DOMAIN}/rrsets/" \
-    -H "Authorization: Token ${API_TOKEN}" \
+# use patch instead of put to preserve existing records (idempotency).
+response=$(curl -s -w "%{http_code}" -X PATCH "https://desec.io/api/v1/domains/${domain}/rrsets/" \
+    -H "Authorization: Token ${desec_token}" \
     -H "Content-Type: application/json" \
-    -d "${JSON_PAYLOAD}")
+    -d "$payload")
 
-# extract response elements
-HTTP_STATUS="${RESPONSE:${#RESPONSE}-3}"
-BODY="${RESPONSE:0:${#RESPONSE}-3}"
+http_status="${response:${#response}-3}"
+body="${response:0:${#response}-3}"
 
-if [ "${HTTP_STATUS}" -eq 200 ] || [ "${HTTP_STATUS}" -eq 201 ]; then
-    echo "[+] infrastructure provisioned successfully (HTTP ${HTTP_STATUS})."
+if [[ "$http_status" -ge 200 && "$http_status" -lt 300 ]]; then
+    echo "dns cluster provisioned successfully."
+    exit 0
 else
-    echo "[-] ERROR: deSEC API rejected payload (HTTP ${HTTP_STATUS})."
-    echo "    details: ${BODY}"
+    echo "api failure. http status: $http_status" >&2
+    echo "response: $body" >&2
     exit 1
 fi

@@ -1,26 +1,39 @@
 services:
   mailserver:
-    image: mailserver/docker-mailserver:latest
+    image: docker.io/mailserver/docker-mailserver:latest
     container_name: mailserver
-    hostname: your_aws_ec2_hostname
-    domainname: your_domain.dedyn.io
+    hostname: ${mail_hostname:-mail.example.com}
+    env_file:
+      - .env
     ports:
-      - "25:25"     # inbound mail delivery
-      - "143:143"   # IMAP sync
-      - "587:587"   # SMTP outbound submission
+      - "25:25"     # smtp (required for inbound mta-to-mta transport)
+      - "465:465"   # smtps (implicit tls client submission)
+      - "587:587"   # submission (starttls)
+      - "993:993"   # imaps (implicit tls)
+      # plaintext client ports (143, 110) are intentionally dropped.
     volumes:
       - ./docker-maildata:/var/mail
       - ./docker-maildata-state:/var/mail-state
+      - ./docker-maildata-logs:/var/log/mail
       - ./docker-config:/tmp/docker-mailserver
+      # mount external let's encrypt certificates as read-only.
+      - ./letsencrypt:/etc/letsencrypt:ro
       - /etc/localtime:/etc/localtime:ro
-    environment:
-      - ENABLE_SPAMASSASSIN=0
-      - ENABLE_CLAMAV=0
-      - ENABLE_FAIL2BAN=1
-      - ONE_DIR=1
-      - DMS_DEBUG=0
-      - RELAY_HOST=smtp-relay.brevo.com
-      - RELAY_PORT=587
-      - RELAY_USER=[REDACTED_BREVO_SMTP_LOGIN_EMAIL]
-      - RELAY_PASS=[REDACTED_BREVO_SMTP_KEY]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mail_net
     restart: always
+    cap_add:
+      - net_admin
+
+networks:
+  mail_net:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+        - subnet: 2001:db8:1::/64
