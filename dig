@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# intercept specific domain configurations targeted by our audit script
-if [[ "$*" == *"+short MX brokendomain.local"* ]]; then
-    echo "10 mail.brokendomain.local."
-    exit 0
+# dynamically locate the real dig binary in the system path, 
+# explicitly excluding this mock script to prevent infinite recursion.
+real_dig=$(which -a dig | grep -vFx "$0" | head -n 1 || true)
 
-elif [[ "$*" == *"+short TXT brokendomain.local"* ]]; then
-    # trigger 1: multiple spf records
-    # echo '"v=spf1 include:_spf.google.com ~all"'
-    # echo '"v=spf1 include:sendgrid.net -all"'
-    
-    # trigger 2: 10+ dns lookup limit rule violation
-    # (uncomment the line below and comment out the two lines above to switch tests)
-    echo '"v=spf1 include:1.com include:2.com include:3.com include:4.com include:5.com include:6.com include:7.com include:8.com include:9.com include:10.com include:11.com ~all"'
-    exit 0
-
-elif [[ "$*" == *"brokendomain.local"* ]]; then
-    # return empty for subdomains (_dmarc, _mta-sts, selectors) to trigger compounding warnings
-    echo ""
-    exit 0
+if [[ -z "$real_dig" ]]; then
+    echo "[-] dig mock error: real dig binary not found in system PATH." >&2
+    exit 1
 fi
 
-# fallback to the real system utility for any normal domains
-/usr/bin/dig "$@"
+# intercept mock domain for unit testing (dns failure lab)
+if [[ "$*" == *"brokendomain.local"* ]]; then
+    if [[ "$*" == *TXT* && "$*" != *"_dmarc"* ]]; then
+        # simulate rfc violation: multiple spf records
+        echo '"v=spf1 include:_spf.google.com ~all"'
+        echo '"v=spf1 include:sendgrid.net -all"'
+        exit 0
+    fi
+    
+    if [[ "$*" == *"_dmarc.brokendomain.local"* ]]; then
+        # simulate missing dmarc record
+        exit 0
+    fi
+fi
+
+# fallback to actual dig binary for all other external queries.
+# use exec to replace the current process (saves memory overhead).
+exec "$real_dig" "$@"
