@@ -1,7 +1,49 @@
-mailserver/docker-data/
+# Environment Variables & Secrets
 
-__pycache__/
-*.pyc
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.crt
+secret/
+
+
+# Docker Mailserver Persistent Volumes (Must match docker-compose.yml)
+
+mailserver/docker-maildata/
+mailserver/docker-maildata-state/
+mailserver/docker-maildata-logs/
+mailserver/docker-config/
+mailserver/letsencrypt/
+
+
+# Local Execution State & Raw Data (PII Protection)
+
+raw_leads.json
+.processed_leads.state
+*.csv
+*.tsv
+*.log
+
+
+# OS & Editor Generated Junk
 
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+# Caches
+
+__pycache__/
+*.py[cod]
+*$py.class
