@@ -1,44 +1,144 @@
 {
-  "name": "Apollo to Smartlead Programmatic Ingest Pipeline",
-  "flow": [
-    {
-      "id": 1,
-      "module": "gateway:CustomWebhook",
-      "metadata": {
-        "label": "Apollo Webhook Listener"
-      }
-    },
-    {
-      "id": 2,
-      "module": "string:RegexReplace",
-      "metadata": {
-        "label": "Sanitize Company Suffixes"
-      },
-      "params": {
-        "pattern": "\\s+(Inc\\.|LLC|Co\\.|Ltd\\.|Incorporated)$",
-        "replacement": ""
-      }
-    },
-    {
-      "id": 3,
-      "module": "http:MakeRequest",
-      "metadata": {
-        "label": "Hunter.io Verification Gate"
-      }
-    },
-    {
-      "id": 4,
-      "module": "router:Filters",
-      "metadata": {
-        "label": "Deliverability Filter (Valid Only)"
-      }
-    },
-    {
-      "id": 5,
-      "module": "http:MakeRequest",
-      "metadata": {
-        "label": "Smartlead Campaign Injection"
-      }
+    "name": "Apollo -> Hunter -> Instantly (Lead Ingestion)",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": 34912
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": -300,
+                    "y": 0
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "label": "Apollo Ingestion Webhook"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "id": 2,
+            "module": "http:ActionGet",
+            "version": 3,
+            "parameters": {
+                "handleErrors": false
+            },
+            "mapper": {
+                "url": "https://api.hunter.io/v2/email-verifier",
+                "method": "get",
+                "headers": [],
+                "qs": [
+                    {
+                        "name": "email",
+                        "value": "{{1.email}}"
+                    },
+                    {
+                        "name": "api_key",
+                        "value": "{{env.HUNTER_API_KEY}}"
+                    }
+                ],
+                "serializeUrl": false,
+                "shareCookies": false,
+                "parseResponse": true,
+                "timeout": 15
+            },
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 0
+                },
+                "parameters": [
+                    {
+                        "name": "handleErrors",
+                        "type": "boolean"
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "text",
+                        "label": "URL",
+                        "required": true
+                    }
+                ]
+            }
+        },
+        {
+            "id": 3,
+            "module": "http:ActionMakeRequest",
+            "version": 3,
+            "parameters": {
+                "handleErrors": false
+            },
+            "filter": {
+                "name": "Deliverable Only",
+                "conditions": [
+                    [
+                        {
+                            "a": "{{2.data.data.status}}",
+                            "o": "text:equal",
+                            "b": "valid"
+                        }
+                    ]
+                ]
+            },
+            "mapper": {
+                "url": "https://api.instantly.ai/api/v1/lead/add",
+                "method": "post",
+                "headers": [
+                    {
+                        "name": "Authorization",
+                        "value": "Bearer {{env.INSTANTLY_API_KEY}}"
+                    },
+                    {
+                        "name": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "bodyType": "raw",
+                "bodyContentType": "json",
+                "bodyContent": "{\n  \"leads\": [\n    {\n      \"email\": \"{{1.email}}\",\n      \"firstName\": \"{{1.first_name}}\",\n      \"companyName\": \"{{1.company}}\"\n    }\n  ]\n}",
+                "serializeUrl": false,
+                "shareCookies": false,
+                "parseResponse": true,
+                "timeout": 45
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 0
+                },
+                "parameters": [
+                    {
+                        "name": "handleErrors",
+                        "type": "boolean"
+                    }
+                ]
+            }
+        }
+    ],
+    "metadata": {
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "us1.make.com"
     }
-  ]
 }
