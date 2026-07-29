@@ -1,31 +1,37 @@
-# clay cascading waterfall enrichment & verification logic
-low-cost reputation protection system for high-volume outbound databases.
+# data enrichment & validation waterfall
+**pipeline objective:** sanitize raw b2b leads and minimize api verification costs through strategic waterfall routing.
 
-## 1. the routing logic (the waterfall)
-to minimize api costs while maintaining hard bounce rates strictly below 2%, we run leads through a sequential verification cascade:
+## 1. data sanitization (pre-verification)
+raw data from apollo/zoominfo is notoriously dirty. sending dirty names to smtp relays increases spam scores. we clean the data in clay before passing it to the validation waterfall.
 
-step 1: run apollo raw email through hunter.io api ($0.01 per check).
-  - if status is "deliverable" -> mark valid, push to campaign database.
-  - if status is "undeliverable" -> mark invalid, drop record.
-  - if status is "accept-all" (catch-all) -> route to step 2.
-
-step 2: route catch-all leads to zerobounce api ($0.002 per check) for deep smtp handshake verification.
-  - if status is "valid" -> mark valid, push to campaign.
-  - if status is "invalid" -> drop record.
-  - if status is "unknown" / "do_not_mail" -> route to step 3.
-
-step 3: route remaining high-risk catch-alls to scrubby.ai ($0.03 per check) for live inbox interaction validation.
-  - if verified -> mark valid, push to campaign.
-  - if unverified -> drop record.
-
-## 2. data cleaning formulas (clay / javascript equivalent)
-clean mixed-case names and strip trailing corporate clutter before sending payload to the outreach api:
-
+**first name normalization (javascript):**
+naive `.toupper()` functions break on complex names. this regex handles hyphens and apostrophes natively.
 ```javascript
-// clean first name casing (e.g. jOHN -> John)
-const rawName = lead.first_name;
-const cleanName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+// normalizes "jean-luc", "O'CONNOR", and "mary jane"
+return rawName.toLowerCase().replace(/(?:^|[\s-'])\w/g, match => match.toUpperCase());
+```
 
-// strip corporate suffixes (e.g. Acme LLC -> Acme)
-const rawCompany = lead.company_name;
-const cleanCompany = rawCompany.replace(/\s+(Inc\.|LLC|Co\.|Ltd\.|Incorporated)$/gi, "");
+**company suffix stripping (regex):**
+raw databases often include trailing commas or periods (e.g., "acme llc,"). this regex strips the suffix while absorbing trailing punctuation.
+```javascript
+// strips "inc", "llc", "co", "ltd" ignoring case and trailing symbols
+return rawCompany.replace(/\s+(Inc|LLC|Co|Ltd|Incorporated)[^\w]*$/gi, '').trim();
+```
+
+## 2. validation waterfall routing
+do not blindly trust a single verification provider. route based on cost and accuracy.
+
+**tier 1: hunter.io (bulk screening)**
+- `valid` -> push to instantly.ai.
+- `invalid` -> drop lead.
+- `accept_all` / `unknown` -> pass to tier 2.
+
+**tier 2: zerobounce (smtp handshake)**
+- `valid` -> push to instantly.ai.
+- `invalid` -> drop lead.
+- `catch-all` -> pass to tier 3 (scrubby). 
+*(warning: do not trust zerobounce "valid" responses on catch-all domains. smtp handshakes on catch-alls yield high false positives. route all catch-alls to tier 3).*
+
+**tier 3: scrubby (silent burner injection)**
+- `deliverable` -> push to instantly.ai.
+- `bounced` -> drop lead.
